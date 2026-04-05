@@ -1,0 +1,36 @@
+pipeline {
+    agent none
+    stages {
+        stage('Back-end') {
+            agent { docker { image 'maven:3.8.1-adoptopenjdk-11' } }
+            steps {
+                sh 'mvn --version'
+            }
+        }
+
+        stage('Front-end') {
+            agent { docker { image 'node:16-alpine' } }
+            steps {
+                sh 'node --version'
+            }
+        }
+
+        stage('Database Test') {
+            agent { 
+                docker { 
+                    image 'mysql:8.0'
+                    // We tell Docker to wait for the DB to initialize
+                    args '-e MYSQL_ROOT_PASSWORD=password' 
+                } 
+            }
+            steps {
+                echo "Waiting for MySQL to start..."
+                sh 'sleep 20' // Databases need time to boot up
+                
+                // Using -h 127.0.0.1 tells the client to connect to itself
+                sh 'mysql -u root -ppassword -h 127.0.0.1 -e "SHOW DATABASES;"'
+                sh 'mysql -u root -ppassword -h 127.0.0.1 -e "CREATE DATABASE my_test_db; SHOW DATABASES;"'
+            }
+        }
+    }
+}
