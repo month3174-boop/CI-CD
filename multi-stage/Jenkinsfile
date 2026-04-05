@@ -19,17 +19,27 @@ pipeline {
             agent { 
                 docker { 
                     image 'mysql:8.0'
-                    // We tell Docker to wait for the DB to initialize
-                    args '-e MYSQL_ROOT_PASSWORD=password' 
+                    // Overriding entrypoint to let Jenkins control the shell
+                    args "--entrypoint='' -e MYSQL_ROOT_PASSWORD=password" 
                 } 
             }
             steps {
-                echo "Waiting for MySQL to start..."
-                sh 'sleep 20' // Databases need time to boot up
+                echo "Starting MySQL Server in background..."
+                sh '/usr/local/bin/docker-entrypoint.sh mysqld &'
                 
-                // Using -h 127.0.0.1 tells the client to connect to itself
+                echo "Waiting for MySQL to be healthy..."
+                // Instead of just sleeping, we try to ping the DB until it responds
+                sh '''
+                    attempt=0
+                    until mysqladmin ping -h 127.0.0.1 -ppassword --silent || [ $attempt -gt 10 ]; do
+                        echo "Waiting for database connection... (Attempt: $attempt)"
+                        sleep 5
+                        attempt=$((attempt + 1))
+                    done
+                '''
+                
                 sh 'mysql -u root -ppassword -h 127.0.0.1 -e "SHOW DATABASES;"'
-                sh 'mysql -u root -ppassword -h 127.0.0.1 -e "CREATE DATABASE my_test_db; SHOW DATABASES;"'
+                sh 'mysql -u root -ppassword -h 127.0.0.1 -e "CREATE DATABASE jenkins_test; SHOW DATABASES;"'
             }
         }
     }
